@@ -1,1 +1,15 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global styles. Reset the default body margin so the app background fills the
+   whole viewport (no white frame), and give html/body a matching base colour. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: #0b1020;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

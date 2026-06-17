@@ -71,5 +71,10 @@ export class Logger {
       entry.context = redact(context, this.redactKeys);
     }
     this.provider.log(entry);
+
+    //adding log to test the CI.
+    console.log(entry);
+    //Second test
+    console.log(entry);
   }
 }
