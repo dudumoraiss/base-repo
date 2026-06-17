@@ -1,0 +1,121 @@
+:host {
+  --bg: #0b1020;
+  --card: #151b2e;
+  --text: #e6e9f2;
+  --muted: #97a0b8;
+  --ok: #34d399;
+  --err: #f87171;
+  --load: #fbbf24;
+  display: block;
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 50% -10%, #1b2440, var(--bg));
+  color: var(--text);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.card {
+  width: min(440px, 100%);
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.subtitle {
+  margin: 0.25rem 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status--ok .dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.18);
+}
+.status--error .dot {
+  background: var(--err);
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.18);
+}
+.status--loading .dot {
+  background: var(--load);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+}
+.details dt {
+  color: var(--muted);
+}
+.details dd {
+  margin: 0;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.error {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  background: rgba(248, 113, 113, 0.08);
+  border-radius: 10px;
+  color: var(--err);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.retry {
+  margin-top: 1.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0b1020;
+  background: var(--text);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.retry:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

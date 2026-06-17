@@ -1,0 +1,40 @@
+<main class="page">
+  <section class="card">
+    <header>
+      <h1>Demo</h1>
+      <p class="subtitle">
+        Angular → shared <code>&#64;org/observability</code> → API
+        <code>/health</code>
+      </p>
+    </header>
+
+    @if (isLoading()) {
+      <div class="status status--loading">
+        <span class="dot"></span> Checking backend…
+      </div>
+    }
+
+    @if (liveData(); as data) {
+      <div class="status status--ok">
+        <span class="dot"></span> Backend service is live
+      </div>
+      <dl class="details">
+        <dt>status</dt>
+        <dd>{{ data.status }}</dd>
+        <dt>service</dt>
+        <dd>{{ data.service }}</dd>
+      </dl>
+    }
+
+    @if (errorMessage(); as message) {
+      <div class="status status--error">
+        <span class="dot"></span> Backend unreachable
+      </div>
+      <pre class="error">{{ message }}</pre>
+    }
+
+    <button class="retry" (click)="refresh()" [disabled]="isLoading()">
+      Retry
+    </button>
+  </section>
+</main>

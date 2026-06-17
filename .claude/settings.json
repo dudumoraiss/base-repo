@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx nx:*)",
+      "Bash(nx:*)",
+      "Bash(npm ci)",
+      "Bash(npm install)",
+      "Bash(npm run:*)",
+      "Bash(docker compose:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)"
+    ]
+  }
+}

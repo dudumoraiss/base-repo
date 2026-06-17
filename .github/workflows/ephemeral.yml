@@ -1,0 +1,187 @@
+name: Ephemeral PR environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# One environment per PR. Don't cancel in-flight apply/destroy — that could leave
+# half-created infra or a stuck lock.
+concurrency:
+  group: ephemeral-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # assume the AWS deploy role via OIDC
+  contents: read
+  pull-requests: write # post/update the PR comment
+
+env:
+  AWS_REGION: us-east-2
+  PROJECT: baserepo
+  STATE_BUCKET: baserepo-tfstate-837573837601
+  TF_VERSION: '1.9.8'
+  PR_NUMBER: ${{ github.event.pull_request.number }}
+
+jobs:
+  # ---------------------------------------------------------------- test gate
+  test:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx nx run-many -t lint test
+
+  # ---------------------------------------------------------------- deploy
+  deploy:
+    if: github.event.action != 'closed'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push API image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE_URI="${REGISTRY}/${PROJECT}-api:pr-${PR_NUMBER}-${GITHUB_SHA::7}"
+          docker build --platform linux/amd64 -f apps/api/Dockerfile -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform apply (per-PR)
+        id: tf
+        working-directory: infra/ephemeral
+        run: |
+          terraform init \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=ephemeral/pr-${PR_NUMBER}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}"
+          terraform apply -auto-approve \
+            -var="pr_number=${PR_NUMBER}" \
+            -var="image_uri=${IMAGE_URI}" \
+            -var="aws_region=${AWS_REGION}" \
+            -var="project=${PROJECT}"
+          {
+            echo "api_url=$(terraform output -raw api_url)"
+            echo "web_url=$(terraform output -raw web_url)"
+            echo "web_bucket=$(terraform output -raw web_bucket)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build frontend pointed at this PR's API
+        env:
+          API_URL: ${{ steps.tf.outputs.api_url }}
+        run: |
+          npx nx build web --configuration=production
+          api="${API_URL%/}"
+          printf '{ "apiUrl": "%s", "observabilityProvider": "console" }\n' "$api" \
+            > dist/apps/web/browser/config.json
+
+      - name: Sync frontend to S3
+        env:
+          BUCKET: ${{ steps.tf.outputs.web_bucket }}
+        run: aws s3 sync dist/apps/web/browser "s3://${BUCKET}" --delete
+
+      - name: Wait for both to be healthy
+        id: health
+        env:
+          API_URL: ${{ steps.tf.outputs.api_url }}
+          WEB_URL: ${{ steps.tf.outputs.web_url }}
+        run: |
+          health="${API_URL%/}/health"
+          api_ok=false; web_ok=false
+          for i in $(seq 1 40); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' "$health")" = "200" ] && api_ok=true
+            [ "$(curl -s -o /dev/null -w '%{http_code}' "$WEB_URL")" = "200" ] && web_ok=true
+            { [ "$api_ok" = true ] && [ "$web_ok" = true ]; } && break
+            sleep 6
+          done
+          body="$(curl -s "$health" || true)"
+          echo "api_ok=$api_ok" >> "$GITHUB_OUTPUT"
+          echo "web_ok=$web_ok" >> "$GITHUB_OUTPUT"
+          echo "api_body=$body" >> "$GITHUB_OUTPUT"
+          echo "Health: api=$api_ok web=$web_ok body=$body"
+
+      - name: Comment environment URLs on the PR
+        if: always() && steps.tf.outputs.api_url != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ephemeral-env
+          message: |
+            ### 🚀 Ephemeral environment for PR #${{ env.PR_NUMBER }}
+
+            | Resource | URL | Status |
+            | --- | --- | --- |
+            | Frontend | ${{ steps.tf.outputs.web_url }} | ${{ steps.health.outputs.web_ok == 'true' && '✅ live' || '⏳ not responding' }} |
+            | API health | ${{ steps.tf.outputs.api_url }}health | ${{ steps.health.outputs.api_ok == 'true' && '✅ live' || '⏳ not responding' }} |
+
+            API `/health` response: `${{ steps.health.outputs.api_body }}`
+
+            Updated for commit ${{ github.sha }} · tears down when this PR closes.
+
+      - name: Fail if not healthy
+        if: steps.health.outputs.api_ok != 'true' || steps.health.outputs.web_ok != 'true'
+        run: |
+          echo "::error::Environment is not fully healthy (api=${{ steps.health.outputs.api_ok }} web=${{ steps.health.outputs.web_ok }})"
+          exit 1
+
+  # ---------------------------------------------------------------- teardown
+  teardown:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform destroy (per-PR)
+        working-directory: infra/ephemeral
+        run: |
+          terraform init \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=ephemeral/pr-${PR_NUMBER}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}"
+          terraform destroy -auto-approve \
+            -var="pr_number=${PR_NUMBER}" \
+            -var="image_uri=none" \
+            -var="aws_region=${AWS_REGION}" \
+            -var="project=${PROJECT}"
+
+      - name: Update the PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ephemeral-env
+          message: |
+            ### 🧹 Ephemeral environment for PR #${{ env.PR_NUMBER }} removed
+
+            All resources (Lambda, Function URL, S3 site) have been destroyed.

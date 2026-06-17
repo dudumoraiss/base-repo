@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in. (terraform.tfvars is git-ignored.)
+aws_region   = "us-east-2"
+project      = "baserepo"
+github_org   = "dudumoraiss" # repo owner -> OIDC trust subject
+github_repo  = "base-repo"
+state_bucket = "baserepo-tfstate-837573837601"

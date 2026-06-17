@@ -1,0 +1,25 @@
+# Local full-stack: `docker compose up --build`
+#   web -> http://localhost:8081  (Angular via nginx)
+#   api -> http://localhost:3000/health  (Express; the browser calls it directly)
+#
+# The web image's baked config.json points at http://localhost:3000, which maps
+# to the api container — so the browser (on the host) reaches the API.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      OBSERVABILITY_PROVIDER: console
+      ENV_NAME: local
+    ports:
+      - '3000:8080'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - '8081:80'
