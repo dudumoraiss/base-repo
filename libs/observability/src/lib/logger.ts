@@ -72,9 +72,5 @@ export class Logger {
     }
     this.provider.log(entry);
 
-    //adding log to test the CI.
-    console.log(entry);
-    //Second test
-    console.log(entry);
   }
 }
