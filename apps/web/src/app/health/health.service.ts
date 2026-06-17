@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { APP_CONFIG } from '../core/app-config';
 import { LOGGER } from '../core/logger.token';
+import { describeHttpError } from '../core/http-error';
 import type { HealthResponse } from './health.model';
 
 /**
@@ -25,7 +26,10 @@ export class HealthService {
       });
       return response;
     } catch (error) {
-      this.logger.error('health check failed', { url, error: String(error) });
+      this.logger.error('health check failed', {
+        url,
+        error: describeHttpError(error),
+      });
       throw error;
     }
   }

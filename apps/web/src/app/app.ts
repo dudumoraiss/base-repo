@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { HealthService } from './health/health.service';
+import { describeHttpError } from './core/http-error';
 import type { HealthResponse } from './health/health.model';
 
 type HealthState =
@@ -40,7 +41,7 @@ export class App {
       const data = await this.health.check();
       this.state.set({ kind: 'live', data });
     } catch (error) {
-      this.state.set({ kind: 'error', message: String(error) });
+      this.state.set({ kind: 'error', message: describeHttpError(error) });
     }
   }
 }
