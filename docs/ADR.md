@@ -148,9 +148,11 @@ frontend HTTPS but its ~15–20 min create/destroy is too slow per-PR; it's the
 documented production upgrade.
 
 **How the three constraints are met.** *Public* — Function URL `authorization_type
-= NONE` (+ a public-invoke permission) and a public-read S3 bucket policy. *PR-
-isolated* — every resource is suffixed with the PR number and each PR has its own
-Terraform state key (`ephemeral/pr-<n>`), so two open PRs share nothing.
+= NONE` plus BOTH resource-based grants the AWS console adds
+(`lambda:InvokeFunctionUrl` to reach the URL **and** `lambda:InvokeFunction` to
+invoke through it — with only one you get 403), and a public-read S3 bucket policy.
+*PR-isolated* — every resource is suffixed with the PR number and each PR has its
+own Terraform state key (`ephemeral/pr-<n>`), so two open PRs share nothing.
 *Cleaned up* — on close, `terraform destroy` removes the stack (`force_destroy`
 empties the bucket); no orphans.
 
@@ -166,8 +168,17 @@ empties the bucket); no orphans.
   scheduled "reaper" that destroys stacks for already-closed PRs is the standard
   backstop.
 - *ECR image churn* — a lifecycle policy expires untagged images.
-- *Mixed HTTP/HTTPS / CORS* — handled (HTTPS-from-HTTP is allowed; Function URL
-  CORS is open for ephemeral only).
+- *Public Function URL is fiddly* — it needs two resource-policy grants (above);
+  a single grant returns 403 `AccessDenied`, which the browser surfaces as a
+  misleading CORS error (error responses carry no CORS headers). The two
+  `aws_lambda_permission` resources mutate the same policy, so they're serialised
+  with `depends_on` to avoid a provider read-back hang on parallel creation. The
+  container image must be `linux/amd64` to match the function's architecture.
+- *Mixed HTTP/HTTPS / CORS* — the S3 site is HTTP and the API HTTPS; a browser
+  allows an HTTPS fetch from an HTTP page (mixed-content blocks only the reverse).
+  CORS is owned by the Express app in ONE place: configuring it on both the app
+  and the Function URL returns duplicate `Access-Control-Allow-Origin` headers,
+  which the browser rejects.
 
 **To make this the standard pipeline for a team of 20.** Add the reaper + a TTL so
 stale PRs are reclaimed; put CloudFront (HTTPS, custom subdomain `pr-123.dev…`) in
