@@ -64,6 +64,8 @@ resource "aws_lambda_permission" "public_invoke" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.api.function_name
   principal     = "*"
+
+  depends_on = [aws_lambda_permission.public_url]
 }
 
 # ---------------------------------------------------------------------------
