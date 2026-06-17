@@ -74,5 +74,7 @@ export class Logger {
 
     //adding log to test the CI.
     console.log(entry);
+    //Second test
+    console.log(entry);
   }
 }
