@@ -38,25 +38,32 @@ resource "aws_lambda_function" "api" {
   tags = local.tags
 }
 
+# No CORS block here on purpose: the Express app (`cors()`) owns CORS. Setting it
+# in BOTH places returns duplicate `Access-Control-Allow-Origin` headers, which
+# the browser rejects. Keeping it in the app also matches local/docker-compose.
 resource "aws_lambda_function_url" "api" {
   function_name      = aws_lambda_function.api.function_name
   authorization_type = "NONE"
-
-  cors {
-    allow_origins = ["*"]
-    allow_methods = ["*"]
-    allow_headers = ["*"]
-    max_age       = 3600
-  }
 }
 
-# Public Function URLs require an explicit resource-based permission.
+# A public Function URL needs TWO grants, and the AWS console adds both:
+#   1. invoke the URL endpoint              -> lambda:InvokeFunctionUrl
+#   2. invoke the function THROUGH the URL  -> lambda:InvokeFunction
+# Terraform's aws_lambda_permission only creates #1 (via function_url_auth_type),
+# so #2 must be added explicitly or every request gets 403 AccessDenied.
 resource "aws_lambda_permission" "public_url" {
   statement_id           = "FunctionURLAllowPublicAccess"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.api.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "public_invoke" {
+  statement_id  = "FunctionURLInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api.function_name
+  principal     = "*"
 }
 
 # ---------------------------------------------------------------------------

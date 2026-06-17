@@ -31,6 +31,30 @@ resource "aws_ecr_lifecycle_policy" "api" {
   })
 }
 
+# Allow the Lambda service to pull images from this repo (required for
+# container-image functions), scoped to this project's functions.
+resource "aws_ecr_repository_policy" "api" {
+  repository = aws_ecr_repository.api.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "LambdaECRImageRetrieval"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action = [
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchCheckLayerAvailability",
+      ]
+      Condition = {
+        StringLike = {
+          "aws:sourceArn" = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-api-pr-*"
+        }
+      }
+    }]
+  })
+}
+
 # ---------------------------------------------------------------------------
 # Shared Lambda execution role used by every ephemeral API function.
 # ---------------------------------------------------------------------------
@@ -120,8 +144,8 @@ data "aws_iam_policy_document" "gha_deploy" {
   }
 
   statement {
-    sid       = "PassExecRole"
-    actions   = ["iam:PassRole"]
+    sid       = "ReadAndPassExecRole"
+    actions   = ["iam:GetRole", "iam:PassRole"]
     resources = [aws_iam_role.lambda_exec.arn]
   }
 
