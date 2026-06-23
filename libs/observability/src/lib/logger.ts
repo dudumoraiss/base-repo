@@ -70,6 +70,7 @@ export class Logger {
     if (context !== undefined) {
       entry.context = redact(context, this.redactKeys);
     }
+    console.log(entry)
     this.provider.log(entry);
 
   }
